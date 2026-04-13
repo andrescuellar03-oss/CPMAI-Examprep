@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PMI CPMAI Exam Simulator</title>
+  <meta name="description" content="Comprehensive CPMAI certification exam simulator with adaptive study modes, spaced repetition, timed exams, and readiness tracking.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Header / Navigation -->
+  <header>
+    <div class="logo">CPMAI Simulator</div>
+    <div class="header-right">
+      <span id="timer-display" class="timer-display hidden">⏱ 0:00</span>
+      <button id="view-dashboard-btn" class="glass-btn">View Performance Dashboard</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Start Screen -->
+    <div id="start-screen" class="screen glass-panel active">
+      <h1>Ready for the CPMAI Exam?</h1>
+      <p>Test your knowledge of the Cognitive Project Management for AI methodology. <span id="question-count">0</span> questions across the 5 core domains.</p>
+      
+      <!-- Leitner Mastery Box Tracker -->
+      <div id="mastery-dashboard" class="glass-panel" style="margin-top: 1rem; margin-bottom: 1.5rem; text-align: left; padding: 1rem;">
+        <h3 style="margin-top: 0; font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.5rem; display: flex; justify-content: space-between;">
+          <span>🎯 Mastery Progress</span>
+          <span id="mastery-mastered-count" style="color: var(--correct-color); font-weight: bold;">0/0 Mastered</span>
+        </h3>
+        <div style="display: flex; gap: 0.25rem; height: 10px; border-radius: 4px; overflow: hidden; margin-bottom: 1rem; background: var(--border-color);">
+          <div id="mastery-bar-1" style="background: var(--wrong-color); width: 0%; transition: width 0.3s;"></div>
+          <div id="mastery-bar-2" style="background: #fbbf24; width: 0%; transition: width 0.3s;"></div>
+          <div id="mastery-bar-3" style="background: #a78bfa; width: 0%; transition: width 0.3s;"></div>
+          <div id="mastery-bar-4" style="background: #38bdf8; width: 0%; transition: width 0.3s;"></div>
+          <div id="mastery-bar-5" style="background: var(--correct-color); width: 0%; transition: width 0.3s;"></div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; text-align: center; font-size: 0.75rem;">
+          <div class="box-stat"><div style="color: var(--wrong-color); font-weight: bold; font-size: 1rem;" id="box-1-count">0</div><div style="color:var(--text-muted)">Box 1<br>(New/Wrong)</div></div>
+          <div class="box-stat"><div style="color: #fbbf24; font-weight: bold; font-size: 1rem;" id="box-2-count">0</div><div style="color:var(--text-muted)">Box 2<br>(Learning)</div></div>
+          <div class="box-stat"><div style="color: #a78bfa; font-weight: bold; font-size: 1rem;" id="box-3-count">0</div><div style="color:var(--text-muted)">Box 3<br>(Reviewing)</div></div>
+          <div class="box-stat"><div style="color: #38bdf8; font-weight: bold; font-size: 1rem;" id="box-4-count">0</div><div style="color:var(--text-muted)">Box 4<br>(Almost)</div></div>
+          <div class="box-stat"><div style="color: var(--correct-color); font-weight: bold; font-size: 1rem;" id="box-5-count">0</div><div style="color:var(--text-muted)">Box 5<br>(Mastered)</div></div>
+        </div>
+      </div>
+      
+      <!-- P1: Readiness Ring -->
+      <div id="readiness-ring"></div>
+      
+      <div class="filter-container">
+        <label for="domain-filter">Select a focus area (Optional):</label>
+        <select id="domain-filter" class="glass-select">
+          <option value="All">All Domains</option>
+          <option value="Identify Business Needs and Solutions">Identify Business Needs and Solutions</option>
+          <option value="Identify Data Needs">Identify Data Needs</option>
+          <option value="Manage AI Model Development and Evaluation">Manage AI Model Development and Evaluation</option>
+          <option value="Operationalize AI Solutions">Operationalize AI Solutions</option>
+          <option value="Support Responsible and Trustworthy AI Efforts">Support Responsible and Trustworthy AI Efforts</option>
+        </select>
+      </div>
+      
+      <!-- P2: Timer Toggle -->
+      <div class="timer-toggle-container">
+        <label class="toggle-label" for="timer-toggle">
+          <span>⏱ Exam Timer</span>
+          <span class="toggle-hint">~65s per question, matching real exam pace</span>
+        </label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="timer-toggle">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      
+      <div class="filter-container">
+        <label for="study-mode">Select Study Mode:</label>
+        <div class="difficulty-filter">
+          <span class="diff-filter-label">Difficulty:</span>
+          <button class="diff-tab diff-tab-active" data-diff="all">All</button>
+          <button class="diff-tab" data-diff="easy">Easy</button>
+          <button class="diff-tab" data-diff="medium">Medium</button>
+          <button class="diff-tab" data-diff="hard">Hard</button>
+        </div>
+        <div class="mode-grid">
+          <button id="mode-smart-drill" class="mode-btn" style="border-left: 3px solid var(--accent-primary);">⚡ Smart Drill<div class="mode-btn-hint">10 Qs focused on lower boxes</div></button>
+          <button id="mode-mastery" class="mode-btn" style="border-left: 3px solid #fbbf24;">🎯 Mastery Mode<div class="mode-btn-hint">Continuous drilling until mastered</div></button>
+          <button id="mode-full" class="mode-btn" style="border-left: 3px solid var(--correct-color);">📚 Full Mock Exam<div class="mode-btn-hint">Test all domains</div></button>
+          <button id="mode-study" class="mode-btn" style="border-left: 3px solid #38bdf8;">📖 Study Mode<div class="mode-btn-hint">Flashcards — no pressure</div></button>
+          <button id="mode-exam-sim" class="mode-btn mode-btn-featured" style="border-left: 3px solid #f472b6;">🎓 Exam Simulation<div class="mode-btn-hint">50 Qs, domain-weighted, timed, no feedback — mirrors the real exam</div></button>
+        </div>
+      </div>
+
+      <!-- 🎮 Game Center -->
+      <div class="game-center-section">
+        <h3 class="game-center-title">🎮 Game Center</h3>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">Learn through play — games feed into your mastery tracking.</p>
+        <div class="game-grid">
+          <button id="game-term-matcher" class="game-btn" style="border-left: 3px solid #06b6d4;">
+            🎯 Term Matcher
+            <div class="game-btn-hint">Match terms to definitions</div>
+          </button>
+          <button id="game-rapid-fire" class="game-btn" style="border-left: 3px solid #f59e0b;">
+            ⚡ Rapid Fire
+            <div class="game-btn-hint">Speed flashcards with combos</div>
+          </button>
+          <button id="game-phase-seq" class="game-btn" style="border-left: 3px solid #8b5cf6;">
+            🔄 Phase Sequencer
+            <div class="game-btn-hint">Order the CPMAI lifecycle</div>
+          </button>
+          <button id="game-minesweeper" class="game-btn" style="border-left: 3px solid #ec4899;">
+            💣 Concept Minesweeper
+            <div class="game-btn-hint">Find terms by category</div>
+          </button>
+        </div>
+        <div id="game-high-scores" class="game-high-scores"></div>
+      </div>
+
+      <!-- Data Management -->
+      <div class="data-management">
+        <button id="export-btn" class="glass-btn">📤 Export Progress</button>
+        <button id="import-btn" class="glass-btn">📥 Import Progress</button>
+        <button id="reset-btn" class="glass-btn" style="color: var(--wrong-color); border-color: rgba(239,68,68,0.3);">🗑 Reset All Data</button>
+        <input type="file" id="import-file-input" accept=".json" style="display:none;">
+      </div>
+    </div>
+
+    <!-- ═══ GAME: Term Matcher ═══ -->
+    <div id="game-matcher-screen" class="screen glass-panel">
+      <div class="game-header">
+        <h2>🎯 Term Matcher</h2>
+        <div class="game-header-right">
+          <span id="matcher-timer" class="game-timer">⏱ 0:00</span>
+          <span id="matcher-score" class="game-score-badge">0 pts</span>
+        </div>
+      </div>
+      <p id="matcher-instruction" style="color:var(--text-muted); margin-bottom:1rem;">Click a term, then click its matching definition.</p>
+      <div class="matcher-board">
+        <div id="matcher-terms" class="matcher-col"></div>
+        <div id="matcher-defs" class="matcher-col"></div>
+      </div>
+      <div id="matcher-result" class="game-result hidden"></div>
+      <div class="game-footer">
+        <button id="matcher-home-btn" class="glass-btn">← Back</button>
+        <button id="matcher-restart-btn" class="primary-btn hidden">Play Again</button>
+      </div>
+    </div>
+
+    <!-- ═══ GAME: Rapid Fire ═══ -->
+    <div id="game-rapid-screen" class="screen glass-panel">
+      <div class="game-header">
+        <h2>⚡ Rapid Fire</h2>
+        <div class="game-header-right">
+          <span id="rapid-lives" class="game-lives">❤️❤️❤️</span>
+          <span id="rapid-combo" class="game-combo">×1</span>
+          <span id="rapid-score" class="game-score-badge">0 pts</span>
+        </div>
+      </div>
+      <div id="rapid-progress" class="rapid-progress-bar">
+        <div id="rapid-timer-bar" class="rapid-timer-fill"></div>
+      </div>
+      <div id="rapid-card" class="rapid-card">
+        <span id="rapid-q-counter" class="rapid-q-counter">1/20</span>
+        <h3 id="rapid-term" class="rapid-term">Term</h3>
+        <div id="rapid-options" class="rapid-options"></div>
+      </div>
+      <div id="rapid-result" class="game-result hidden"></div>
+      <div class="game-footer">
+        <button id="rapid-home-btn" class="glass-btn">← Back</button>
+        <button id="rapid-restart-btn" class="primary-btn hidden">Play Again</button>
+      </div>
+    </div>
+
+    <!-- ═══ GAME: Phase Sequencer ═══ -->
+    <div id="game-sequencer-screen" class="screen glass-panel">
+      <div class="game-header">
+        <h2>🔄 Phase Sequencer</h2>
+        <div class="game-header-right">
+          <span id="seq-level" class="game-score-badge">Level 1</span>
+          <span id="seq-score" class="game-score-badge">0 pts</span>
+        </div>
+      </div>
+      <p id="seq-instruction" style="color:var(--text-muted); margin-bottom:1rem;">Drag the CPMAI phases into the correct order (top to bottom).</p>
+      <div id="seq-board" class="seq-board"></div>
+      <div id="seq-feedback" class="seq-feedback hidden"></div>
+      <div id="seq-result" class="game-result hidden"></div>
+      <div class="game-footer">
+        <button id="seq-home-btn" class="glass-btn">← Back</button>
+        <button id="seq-check-btn" class="primary-btn">Check Order ✓</button>
+        <button id="seq-next-btn" class="primary-btn hidden">Next Level →</button>
+        <button id="seq-restart-btn" class="primary-btn hidden">Play Again</button>
+      </div>
+    </div>
+
+    <!-- ═══ GAME: Concept Minesweeper ═══ -->
+    <div id="game-mines-screen" class="screen glass-panel">
+      <div class="game-header">
+        <h2>💣 Concept Minesweeper</h2>
+        <div class="game-header-right">
+          <span id="mines-round" class="game-score-badge">Round 1/3</span>
+          <span id="mines-score" class="game-score-badge">0 pts</span>
+        </div>
+      </div>
+      <div id="mines-prompt" class="mines-prompt">Find all terms related to: <strong id="mines-category">Category</strong></div>
+      <div id="mines-grid" class="mines-grid"></div>
+      <div id="mines-feedback" class="mines-feedback hidden"></div>
+      <div id="mines-result" class="game-result hidden"></div>
+      <div class="game-footer">
+        <button id="mines-home-btn" class="glass-btn">← Back</button>
+        <button id="mines-submit-btn" class="primary-btn">Submit Picks ✓</button>
+        <button id="mines-next-btn" class="primary-btn hidden">Next Round →</button>
+        <button id="mines-restart-btn" class="primary-btn hidden">Play Again</button>
+      </div>
+    </div>
+
+    <!-- Quiz Screen -->
+    <div id="quiz-screen" class="screen">
+      <div class="progress-container">
+        <span id="question-tracker">Question 1 of 10</span>
+        <div class="progress-bar-bg">
+          <div id="progress-bar" class="progress-bar-fill"></div>
+        </div>
+      </div>
+      
+      <div class="domain-badge" id="domain-badge">Domain Name</div>
+      
+      <div class="quiz-layout-grid">
+        <div class="question-container glass-panel">
+          <h2 id="question-text">Question goes here...</h2>
+          <div id="options-container" class="options-container">
+            <!-- Options injected via JS -->
+          </div>
+          <div style="margin-top: 1.5rem; display: flex; justify-content: space-between; align-items: center;">
+            <button id="quit-quiz-btn" class="glass-btn" style="color: var(--text-muted);">← Quit Quiz</button>
+            <div id="confidence-buttons" class="confidence-buttons hidden">
+              <span class="confidence-label">Confidence:</span>
+              <button class="conf-btn conf-low" data-conf="low">😐 Low</button>
+              <button class="conf-btn conf-med" data-conf="medium">🤔 Med</button>
+              <button class="conf-btn conf-high" data-conf="high">💪 High</button>
+            </div>
+            <button id="flag-btn" class="glass-btn" style="color: #ffb86c; border-color: rgba(255, 184, 108, 0.3);">Flag / Skip Question 🚩</button>
+          </div>
+        </div>
+
+        <!-- Feedback Modal / Panel -->
+        <div id="feedback-panel" class="feedback-panel hidden glass-panel">
+        <h3 id="feedback-title">Result</h3>
+        <p id="feedback-explanation">Explanation goes here.</p>
+        <div class="key-concept-box">
+          <strong>Key Concept:</strong> <span id="key-concept-text">Key concept goes here.</span>
+        </div>
+        <p class="source-text">Source: <span id="source-text">Source</span></p>
+        <button id="next-btn" class="primary-btn">Next Question &rarr;</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flagged / Skipped Review Screen -->
+    <div id="flagged-screen" class="screen glass-panel">
+      <h1>Review Flagged Questions</h1>
+      <p style="margin-bottom: 2rem;">You skipped the following questions. Select one to revisit it, or permanently submit your exam to view your dashboard.</p>
+      
+      <div id="flagged-grid" style="display: flex; flex-wrap: wrap; gap: 1rem;">
+        <!-- Generated via JS -->
+      </div>
+      
+      <div class="action-buttons" style="margin-top: 3rem; display: flex; justify-content: flex-end; gap: 1rem;">
+        <button id="submit-exam-btn" class="primary-btn" style="background-color: var(--wrong-color);">Submit Exam &amp; View Scores</button>
+      </div>
+    </div>
+
+    <!-- Dashboard / Result Screen -->
+    <div id="dashboard-screen" class="screen glass-panel">
+      <h1>Your Performance Dashboard</h1>
+      <h2 id="final-score" class="score-highlight">0%</h2>
+      
+      <!-- Predicted Exam Score -->
+      <div id="predicted-score-container" class="hidden">
+        <div class="predicted-score-widget">
+          <span class="predicted-label">Predicted Exam Score</span>
+          <span id="predicted-score-value" class="predicted-value">—</span>
+          <span id="predicted-score-verdict" class="predicted-verdict"></span>
+        </div>
+      </div>
+      
+      <!-- P1: Readiness Banner -->
+      <div id="dashboard-readiness"></div>
+      
+      <!-- P2: Average Time Stat -->
+      <p id="avg-time-stat" class="avg-time-stat hidden"></p>
+
+      <!-- ═══ Progress Analytics Suite ═══ -->
+      <div id="progress-analytics" class="analytics-suite">
+        <h3 class="analytics-suite-title">📊 Progress Analytics</h3>
+
+        <!-- Accuracy Trend (Enhanced) -->
+        <div id="session-history-container" class="analytics-card hidden">
+          <div class="analytics-card-header">
+            <span class="analytics-card-title">📈 Accuracy Trend</span>
+            <span id="trend-indicator" class="trend-indicator"></span>
+          </div>
+          <canvas id="session-history-chart" width="600" height="200"></canvas>
+          <div class="chart-legend">
+            <span class="legend-item"><span class="legend-dot" style="background:#818cf8;"></span>Session Score</span>
+            <span class="legend-item"><span class="legend-line" style="background:#f472b6;"></span>3-Session Avg</span>
+            <span class="legend-item"><span class="legend-dash" style="border-color:#fbbf24;"></span>Pass Line (65%)</span>
+          </div>
+        </div>
+
+        <!-- Two-column row: Radar + Heatmap -->
+        <div class="analytics-row">
+          <!-- Domain Radar Chart -->
+          <div id="domain-radar-container" class="analytics-card hidden">
+            <div class="analytics-card-header">
+              <span class="analytics-card-title">🕸️ Domain Strengths</span>
+            </div>
+            <canvas id="domain-radar-chart" width="320" height="320"></canvas>
+          </div>
+
+          <!-- Study Activity Heatmap -->
+          <div id="activity-heatmap-container" class="analytics-card hidden">
+            <div class="analytics-card-header">
+              <span class="analytics-card-title">🔥 Study Activity</span>
+              <span id="streak-badge" class="streak-badge"></span>
+            </div>
+            <div id="activity-heatmap" class="heatmap-grid"></div>
+            <div class="heatmap-legend">
+              <span style="color:var(--text-muted); font-size:0.7rem;">Less</span>
+              <span class="heatmap-swatch" style="background:rgba(99,102,241,0.08);"></span>
+              <span class="heatmap-swatch" style="background:rgba(99,102,241,0.25);"></span>
+              <span class="heatmap-swatch" style="background:rgba(99,102,241,0.5);"></span>
+              <span class="heatmap-swatch" style="background:rgba(99,102,241,0.75);"></span>
+              <span class="heatmap-swatch" style="background:#818cf8;"></span>
+              <span style="color:var(--text-muted); font-size:0.7rem;">More</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Confidence Calibration -->
+      <div id="calibration-container" class="hidden">
+        <h3 style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 0.75rem;">Confidence Calibration</h3>
+        <div id="calibration-stats" class="calibration-grid"></div>
+      </div>
+
+      <p>Here is your breakdown across the CPMAI domains:</p>
+      
+      <div id="domain-stats-container" class="domain-stats-grid">
+        <!-- Stats injected via JS -->
+      </div>
+      
+      <div id="review-carousel-container" class="hidden">
+        <h3 id="review-question-text" style="font-size: 1.1rem; margin-bottom: 1rem; line-height: 1.5;">Question text</h3>
+        <div id="review-feedback-panel" class="feedback-panel error" style="margin-top: 0; margin-bottom: 1.5rem;">
+          <h3 id="review-feedback-title" style="color: var(--wrong-color); margin-bottom: 0.5rem;">Your Answer Was Incorrect</h3>
+          <p id="review-feedback-explanation" style="font-size: 0.95rem;">Explanation goes here.</p>
+          <div class="key-concept-box">
+            <strong>Key Concept:</strong> <span id="review-key-concept-text">Key concept goes here.</span>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span id="review-tracker" style="color: var(--text-muted); font-size: 0.9rem; font-weight: 600;">1 of 3 Incorrect</span>
+          <button id="next-review-btn" class="primary-btn">Next Wrong Answer &rarr;</button>
+        </div>
+      </div>
+      
+      <div class="action-buttons" style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
+        <button id="review-btn" class="glass-btn hidden">Review Incorrect Answers</button>
+        <button id="restart-btn" class="primary-btn">Restart Quiz</button>
+      </div>
+    </div>
+
+    <!-- Exam Simulation Review Screen -->
+    <div id="exam-review-screen" class="screen glass-panel">
+      <h1>🎓 Exam Results</h1>
+      <h2 id="exam-review-score" class="score-highlight">0%</h2>
+      <p id="exam-review-summary" style="text-align:center; margin-bottom:1.5rem;"></p>
+      <div id="exam-review-list" class="exam-review-list"></div>
+      <div class="action-buttons" style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
+        <button id="exam-review-home-btn" class="primary-btn">Back to Menu</button>
+      </div>
+    </div>
+
+    <!-- P4: Study / Flashcard Mode Screen -->
+    <div id="study-screen" class="screen">
+      <div class="study-header">
+        <span id="study-tracker" class="study-tracker">Card 1 of 54</span>
+        <button id="study-home-btn" class="glass-btn">← Back to Menu</button>
+      </div>
+
+      <div class="domain-badge" id="study-domain-badge">Domain Name</div>
+
+      <div class="study-card glass-panel">
+        <h2 id="study-question-text" class="study-question">Question goes here...</h2>
+        
+        <div id="study-options-display" class="study-options-display">
+          <!-- Options shown with correct highlighted -->
+        </div>
+
+        <div class="study-answer-section">
+          <p id="study-answer-text" class="study-answer"></p>
+          <p id="study-explanation-text" class="study-explanation"></p>
+          <div class="key-concept-box">
+            <strong>Key Concept:</strong> <span id="study-key-concept">Key concept goes here.</span>
+          </div>
+          <p class="source-text">Source: <span id="study-source">PMI CPMAI</span></p>
+        </div>
+      </div>
+
+      <div class="study-nav">
+        <button id="study-prev-btn" class="glass-btn">← Previous</button>
+        <button id="study-shuffle-btn" class="glass-btn">🔀 Shuffle</button>
+        <button id="study-next-btn" class="primary-btn">Next Card →</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="questions_data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
