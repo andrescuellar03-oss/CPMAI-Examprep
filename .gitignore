@@ -1,36 +1,20 @@
-# Study material PDFs (too large for GitHub, not needed for the app)
-*.pdf
-
-# Python caches
-__pycache__/
-*.pyc
-
-# Utility scripts (not needed for deployment)
-append.py
-append_20_gap_questions.py
-patch_questions.py
-update_js.py
-
-# Text extracts of study materials
-PMI-CPMAI_Complete_Study_Manual.txt
-PMI-CPMAI_Questions_Book.txt
-PMI-CPMAI_Study_Book_Machine_Learning.txt
-Complete_Study_Guide_CPMAI_Machine_Learning.txt
-Complete_Study_Guide_CPMAI_Machine_Learning1.txt
-CPMAI_Supplementary_Study_Guide.md
+# Directory Ignored Content
+docs/
+scripts/
 
 # PWA service worker (not needed in Streamlit iframe)
-sw.js
-manifest.json
+frontend/sw.js
+frontend/manifest.json
 
 # Node test artifacts
 node_modules/
 package.json
 package-lock.json
 
+# Python caches
+__pycache__/
+*.pyc
+
 # OS junk
 .DS_Store
 Thumbs.db
-
-# Duplicate data file (questions.json is the source of truth)
-questions_data.js

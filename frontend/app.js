@@ -466,7 +466,7 @@ async function loadQuestions() {
     if (typeof QUESTIONS_DATA !== 'undefined') {
       rawQuestions = QUESTIONS_DATA;
     } else {
-      const response = await fetch('questions.json');
+      const response = await fetch('../data/questions.json');
       rawQuestions = await response.json();
     }
 

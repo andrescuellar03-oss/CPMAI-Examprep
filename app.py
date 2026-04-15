@@ -28,16 +28,20 @@ def load_file(filename):
         return f.read()
 
 try:
-    # 1. Load the raw files from the local directory
-    html_content = load_file('index.html')
-    css_content = load_file('style.css')
-    js_content = load_file('app.js')
-    json_content = load_file('questions.json')
+    # 1. Load the raw files from their new modular directories
+    html_content = load_file('frontend/index.html')
+    css_content = load_file('frontend/style.css')
+    js_content = load_file('frontend/app.js')
+    json_content = load_file('data/questions.json')
     
     # 2. Patch the javascript so that it doesn't attempt to fetch() a network JSON file.
     #    This is required because Streamlit isolates the HTML in an iframe, breaking local fetch requests.
     patched_js = js_content.replace(
         "const response = await fetch('questions.json');", 
+        f"const response = {{ json: async () => {json_content} }};"
+    )
+    patched_js = patched_js.replace(
+        "const response = await fetch('data/questions.json');", 
         f"const response = {{ json: async () => {json_content} }};"
     )
     
@@ -52,17 +56,11 @@ try:
     
     # 3. Bundle everything directly inside the HTML payload:
     #    - Inline CSS (replace the stylesheet link)
-    #    - Inline questions_data.js (replace the script tag with the already-loaded JSON as a JS global)
     #    - Inline app.js (replace the script tag with the patched version)
     #    - Remove the service worker registration (not needed in Streamlit iframe)
-    questions_data_js = f"const QUESTIONS_DATA = {json_content};"
-    
     bundled_html = html_content.replace(
         '<link rel="stylesheet" href="style.css">', 
         f'<style>{css_content}</style>'
-    ).replace(
-        '<script src="questions_data.js"></script>',
-        f'<script>{questions_data_js}</script>'
     ).replace(
         '<script src="app.js"></script>',
         f'<script>{patched_js}</script>'
