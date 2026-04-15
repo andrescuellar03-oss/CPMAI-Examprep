@@ -23,6 +23,11 @@ CPMAI_Supplementary_Study_Guide.md
 sw.js
 manifest.json
 
+# Node test artifacts
+node_modules/
+package.json
+package-lock.json
+
 # OS junk
 .DS_Store
 Thumbs.db
