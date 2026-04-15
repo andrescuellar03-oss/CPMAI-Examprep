@@ -35,13 +35,8 @@ try:
     json_content = load_file('data/questions.json')
     
     # 2. Patch the javascript so that it doesn't attempt to fetch() a network JSON file.
-    #    This is required because Streamlit isolates the HTML in an iframe, breaking local fetch requests.
     patched_js = js_content.replace(
-        "const response = await fetch('questions.json');", 
-        f"const response = {{ json: async () => {json_content} }};"
-    )
-    patched_js = patched_js.replace(
-        "const response = await fetch('data/questions.json');", 
+        "const response = await fetch('../data/questions.json');", 
         f"const response = {{ json: async () => {json_content} }};"
     )
     
