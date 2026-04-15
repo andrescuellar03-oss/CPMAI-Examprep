@@ -41,6 +41,15 @@ try:
         f"const response = {{ json: async () => {json_content} }};"
     )
     
+    # 2b. Securely inject the JSONBin.io Master API key from Streamlit Secrets
+    jsonbin_key = ""
+    if "JSONBIN_API_KEY" in st.secrets:
+        jsonbin_key = st.secrets["JSONBIN_API_KEY"]
+    else:
+        st.warning("⚠️ JSONBIN_API_KEY is not configured in st.secrets. Cloud Sync will not function.")
+        
+    patched_js = patched_js.replace('__STREAMLIT_INJECTED_JSONBIN_KEY__', jsonbin_key)
+    
     # 3. Bundle everything directly inside the HTML payload:
     #    - Inline CSS (replace the stylesheet link)
     #    - Inline questions_data.js (replace the script tag with the already-loaded JSON as a JS global)
@@ -68,7 +77,7 @@ try:
     
     # 4. Render the bundled application as an isolated web component.
     #    Height is generous to avoid dual scrollbars on most viewports.
-    components.html(bundled_html, height=1200, scrolling=True)
+    components.html(bundled_html, height=2000, scrolling=True)
     
 except Exception as e:
     st.error(f"Error loading the simulator: {str(e)}")

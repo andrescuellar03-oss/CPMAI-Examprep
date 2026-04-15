@@ -20,7 +20,8 @@ let globalStats = {
   timePerQuestion: [],   // P2: array of {questionId, seconds}
   sessionHistory: [],    // P6: array of {date, score, mode, count}
   confidenceData: { low: {total:0,correct:0}, medium: {total:0,correct:0}, high: {total:0,correct:0} },
-  masteryState: {}       // Keyed by question.question, value 1-5 (Box level)
+  masteryState: {},      // Keyed by question.question, value 1-5 (Box level)
+  knowledgeGaps: {}      // Recorded errors for NotebookLM export
 };
 
 // P2: Timer state
@@ -513,6 +514,7 @@ async function loadQuestions() {
       // Ensure new fields exist from older saves
       if (!globalStats.questionHistory) globalStats.questionHistory = {};
       if (!globalStats.timePerQuestion) globalStats.timePerQuestion = [];
+      if (!globalStats.knowledgeGaps) globalStats.knowledgeGaps = {};
     }
 
     // Render readiness ring on start screen
@@ -531,6 +533,7 @@ async function loadQuestions() {
   } catch (error) {
     console.error("Error loading questions:", error);
     questionText.innerText = "Error loading questions. Ensure you are running via a local server (e.g. VS Code Live Server) to bypass CORS issues.";
+    showScreen(quizScreen);
   }
 }
 
@@ -657,6 +660,7 @@ function getSmartQuestionPool(sourcePool, limit) {
 }
 
 function startQuiz(mode = 'full') {
+  examSimMode = false;
   const filterDropdown = document.getElementById('domain-filter');
   const selectedDomain = filterDropdown ? filterDropdown.value : 'All';
 
@@ -844,6 +848,19 @@ function handleAnswer(q, selectedBtn, correctBtn) {
   } else {
     // Dropped back to box 1 on incorrect
     globalStats.masteryState[q.question] = 1;
+    
+    // Log for NotebookLM export
+    if (!globalStats.knowledgeGaps) globalStats.knowledgeGaps = {};
+    globalStats.knowledgeGaps[q.id] = {
+      domain: q.domain,
+      question: q.question,
+      selectedOption: q.selectedOption,
+      wrong_explanation: q.wrong_explanation,
+      correct_answer: q.correct_answer,
+      correct_explanation: q.correct_explanation,
+      key_concept: q.key_concept,
+      timestamp: Date.now()
+    };
   }
 
   // P2: Record time spent on this question
@@ -930,7 +947,8 @@ function nextQuestion() {
 function checkFlaggedQuestions() {
   const skipped = questions.filter(q => !q.answered);
   if (skipped.length === 0) {
-    showDashboard(false);
+    if (examSimMode) showExamReview();
+    else showDashboard(false);
   } else {
     flaggedGrid.innerHTML = '';
     questions.forEach((q, idx) => {
@@ -1806,7 +1824,10 @@ restartBtn.addEventListener('click', () => {
 });
 reviewBtn.addEventListener('click', startReview);
 nextReviewBtn.addEventListener('click', handleNextReview);
-submitExamBtn.addEventListener('click', () => showDashboard(false));
+submitExamBtn.addEventListener('click', () => {
+  if (examSimMode) showExamReview();
+  else showDashboard(false);
+});
 
 // Flagged screen home button
 const flaggedHomeBtn = document.getElementById('flagged-home-btn');
@@ -1830,6 +1851,7 @@ if (quitQuizBtn) {
       if (!confirm('You have answered ' + userStats.totalAnswered + ' questions. Quit and lose this session?')) return;
     }
     stopTimer();
+    examSimMode = false;
     renderReadinessRing();
     updateSpacedCount();
     showScreen(startScreen);
@@ -1839,6 +1861,7 @@ if (quitQuizBtn) {
 // Re-route the header logo to act as a Home button
 document.querySelector('header .logo').addEventListener('click', () => {
   stopTimer();
+  examSimMode = false;
   renderReadinessRing();
   updateMasteryUI();
   updateSpacedCount();
@@ -1871,6 +1894,71 @@ if (exportBtn) {
     a.click();
     URL.revokeObjectURL(url);
     showToast('📤 Progress exported successfully!', 'success');
+  });
+}
+
+// NotebookLM Knowledge Gaps Export
+const exportGapsBtn = document.getElementById('export-gaps-btn');
+if (exportGapsBtn) {
+  exportGapsBtn.addEventListener('click', () => {
+    if (!globalStats.knowledgeGaps || Object.keys(globalStats.knowledgeGaps).length === 0) {
+      showToast('No knowledge gaps recorded yet!', 'info');
+      return;
+    }
+    
+    const now = Date.now();
+    const msInDay = 24 * 60 * 60 * 1000;
+    const msInWeek = 7 * msInDay;
+    
+    let todayGaps = [];
+    let weekGaps = [];
+    
+    for (const key in globalStats.knowledgeGaps) {
+      const gap = globalStats.knowledgeGaps[key];
+      const gapTime = gap.timestamp || now; // default to now if missing from old logic
+      
+      if ((now - gapTime) <= msInDay) {
+        todayGaps.push(gap);
+      } else if ((now - gapTime) <= msInWeek) {
+        // Technically "this week" could include today, but separating them is cleaner for review.
+        // We put exclusively "Older than 1 day but less than 7 days" here.
+        weekGaps.push(gap);
+      }
+    }
+    
+    let md = "# My CPMAI Knowledge Gaps\n\n";
+    
+    const appendGapsToMd = (gapsArray, title) => {
+      md += `## ${title}\n`;
+      if (gapsArray.length === 0) {
+        md += `*No gaps recorded for this period.*\n\n`;
+        return;
+      }
+      
+      gapsArray.forEach((gap, index) => {
+        md += `**Concept ${index + 1}: ${gap.domain}**\n`;
+        md += `- **Question:** ${gap.question}\n`;
+        md += `- **What I guessed:** ${gap.selectedOption}\n`;
+        md += `- **Why that was incorrect:** ${gap.wrong_explanation || 'No specific explanation provided.'}\n`;
+        md += `- **The Correct Answer:** ${gap.correct_answer}\n`;
+        md += `- **Why it's correct:** ${gap.correct_explanation}\n`;
+        md += `- **Key Concept to Remember:** ${gap.key_concept}\n\n`;
+      });
+    };
+    
+    appendGapsToMd(todayGaps, "📅 Today's Mistakes (Last 24 Hours)");
+    appendGapsToMd(weekGaps, "🗓️ Cumulative Weekly Review (Past 7 Days)");
+    
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CPMAI_Knowledge_Gaps_NotebookLM.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('🧠 Knowledge Gaps exported for NotebookLM!', 'success');
   });
 }
 
@@ -2732,11 +2820,9 @@ renderHighScores();
 // CLOUD SYNC — Cross-device progress persistence via JSONBin.io
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ⚠️  SECURITY WARNING: This is a Master Key exposed in client-side JS.
-// For a personal study tool this is acceptable, but do NOT use this pattern
-// for any production or multi-user application. Rotate this key if the
-// repo ever becomes public.
-var JSONBIN_API_KEY = '$2a$10$QWJMcKOWqMZcLxIMqOZ78eUL.Y4CzuxZ7dSqR1GKaniNPRpxryMKK';
+// ⚠️  SECURITY NOTE: This key is dynamically injected via Streamlit Secrets
+// in app.py to prevent checking the master key into source control.
+var JSONBIN_API_KEY = '__STREAMLIT_INJECTED_JSONBIN_KEY__';
 var JSONBIN_ROOT = 'https://api.jsonbin.io/v3';
 
 async function hashPassphrase(passphrase) {
