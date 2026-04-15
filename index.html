@@ -19,6 +19,8 @@
     <div class="logo">CPMAI Simulator</div>
     <div class="header-right">
       <span id="timer-display" class="timer-display hidden">⏱ 0:00</span>
+      <span id="sync-status" class="sync-status hidden"></span>
+      <button id="cloud-sync-btn" class="glass-btn" style="color: #38bdf8; border-color: rgba(56,189,248,0.3);">☁️ Cloud Sync</button>
       <button id="view-dashboard-btn" class="glass-btn">View Performance Dashboard</button>
     </div>
   </header>
@@ -269,7 +271,8 @@
         <!-- Generated via JS -->
       </div>
       
-      <div class="action-buttons" style="margin-top: 3rem; display: flex; justify-content: flex-end; gap: 1rem;">
+      <div class="action-buttons" style="margin-top: 3rem; display: flex; justify-content: space-between; align-items: center;">
+        <button id="flagged-home-btn" class="glass-btn" style="color: var(--text-muted);">← Back to Home</button>
         <button id="submit-exam-btn" class="primary-btn" style="background-color: var(--wrong-color);">Submit Exam &amp; View Scores</button>
       </div>
     </div>
@@ -371,7 +374,7 @@
       
       <div class="action-buttons" style="margin-top: 2rem; display: flex; justify-content: flex-end; gap: 1rem;">
         <button id="review-btn" class="glass-btn hidden">Review Incorrect Answers</button>
-        <button id="restart-btn" class="primary-btn">Restart Quiz</button>
+        <button id="restart-btn" class="primary-btn">← Back to Home</button>
       </div>
     </div>
 
@@ -422,6 +425,36 @@
 
   <!-- Toast notification -->
   <div id="toast" class="toast hidden"></div>
+
+  <!-- Cloud Sync Modal -->
+  <div id="sync-modal" class="sync-modal-overlay hidden">
+    <div class="sync-modal glass-panel">
+      <div class="sync-modal-header">
+        <h2>☁️ Cloud Sync</h2>
+        <button id="sync-modal-close" class="sync-modal-close">✕</button>
+      </div>
+      <p style="color: var(--text-muted); margin-bottom: 1.25rem; font-size: 0.9rem;">
+        Sync your progress across devices. Enter the same passphrase on any computer to restore your data.
+      </p>
+
+      <div class="sync-field">
+        <label for="sync-passphrase">Your Passphrase</label>
+        <input type="text" id="sync-passphrase" class="sync-input" placeholder="e.g. andres2026" autocomplete="off" spellcheck="false">
+        <span class="sync-field-hint">Use a memorable phrase — this is your "account"</span>
+      </div>
+
+      <div id="sync-info" class="sync-info hidden">
+        <span id="sync-info-text"></span>
+      </div>
+
+      <div class="sync-actions">
+        <button id="sync-save-btn" class="primary-btn" disabled>📤 Save to Cloud</button>
+        <button id="sync-restore-btn" class="glass-btn" disabled>📥 Restore from Cloud</button>
+      </div>
+
+      <div id="sync-last-synced" class="sync-last-synced hidden"></div>
+    </div>
+  </div>
 
   <script src="questions_data.js"></script>
   <script src="app.js"></script>

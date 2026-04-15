@@ -39,6 +39,9 @@ let examSimMode = false;
 // Confidence calibration state
 let currentConfidence = null;
 
+// Session recording guard
+let sessionRecorded = false;
+
 // Difficulty filter state
 let selectedDifficulty = 'all';
 
@@ -405,7 +408,7 @@ function startStudyMode() {
   studyIndex = 0;
 
   if (studyQuestions.length === 0) {
-    alert('No questions found for this domain.');
+    showToast('No questions found for this domain.', 'warning', 3000);
     return;
   }
 
@@ -556,6 +559,12 @@ function updateMasteryUI() {
   }
 }
 
+// Stub for legacy calls – spaced-repetition counts are refreshed
+// inside updateMasteryUI() which is called by saveGlobalStats().
+function updateSpacedCount() {
+  // no-op: mastery UI is updated via saveGlobalStats → updateMasteryUI
+}
+
 // ─── STATE MANAGEMENT ───────────────────────────────────────────────────────
 function showScreen(screen) {
   startScreen.classList.remove('active');
@@ -568,6 +577,22 @@ function showScreen(screen) {
   const gameScreenIds = ['game-matcher-screen','game-rapid-screen','game-sequencer-screen','game-mines-screen'];
   gameScreenIds.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('active'); });
   screen.classList.add('active');
+
+  // Bug 1: Scroll to top on every screen transition
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Bug 3: Clean up stale EXAM SIM indicator when leaving quiz
+  if (screen !== quizScreen) {
+    const staleIndicator = document.querySelector('.exam-sim-indicator');
+    if (staleIndicator) staleIndicator.remove();
+    quizScreen.classList.remove('exam-sim-mode');
+  }
+
+  // Bug 4: Clean up leaked difficulty badge when leaving quiz
+  if (screen !== quizScreen) {
+    const staleDiffBadge = document.querySelector('.difficulty-badge');
+    if (staleDiffBadge) staleDiffBadge.remove();
+  }
 
   // Stop timer if leaving quiz
   if (screen !== quizScreen) {
@@ -655,14 +680,21 @@ function startQuiz(mode = 'full') {
     // Mastery Mode: All unmastered questions (Boxes 1-4)
     pool = pool.filter(q => (globalStats.masteryState[q.question] || 1) < 5);
     if (pool.length === 0) {
-      alert("You have mastered all available questions! 🎉");
+      showToast('You have mastered all available questions! 🎉', 'success', 4000);
       return;
     }
     // Cap at a reasonable continuous limit to prevent browser slowdowns
     pool = pool.sort(() => Math.random() - 0.5).slice(0, 100);
   }
+
+  // Bug 2: Guard against empty pool after all filters
+  if (pool.length === 0) {
+    showToast('No questions match your current filters. Try a different domain or difficulty.', 'warning', 4000);
+    return;
+  }
   
   currentIndex = 0;
+  sessionRecorded = false;
   questions = pool.sort(() => Math.random() - 0.5);
 
   // Re-build userStats from scratch based on current filtered questions
@@ -929,7 +961,8 @@ function showDashboard(isGlobalView = false) {
   progressBar.style.width = '100%';
 
   // Record session for performance trending (non-global only, avoid dupes)
-  if (!isGlobalView && userStats.totalAnswered > 0) {
+  if (!isGlobalView && userStats.totalAnswered > 0 && !sessionRecorded) {
+    sessionRecorded = true;
     recordSessionOnDashboard();
   }
 
@@ -1653,9 +1686,7 @@ function renderPredictedScore() {
   }
 }
 
-// Also record session history for normal quiz completions
-const originalShowDashboard = showDashboard;
-// We monkey-patch via the nextQuestion flow — record session when dashboard is shown
+// Record session history for normal quiz completions
 function recordSessionOnDashboard() {
   if (userStats.totalAnswered > 0 && questions.length > 0) {
     const pct = Math.round((userStats.totalCorrect / userStats.totalAnswered) * 100);
@@ -1712,6 +1743,7 @@ if (modeExamSimBtn) {
     const examCount = 50;
     examSimMode = true;
     timerEnabled = true;
+    sessionRecorded = false;
 
     // Build a domain-weighted pool
     questions = buildExamPool(examCount);
@@ -1776,6 +1808,20 @@ reviewBtn.addEventListener('click', startReview);
 nextReviewBtn.addEventListener('click', handleNextReview);
 submitExamBtn.addEventListener('click', () => showDashboard(false));
 
+// Flagged screen home button
+const flaggedHomeBtn = document.getElementById('flagged-home-btn');
+if (flaggedHomeBtn) {
+  flaggedHomeBtn.addEventListener('click', () => {
+    if (userStats.totalAnswered > 0) {
+      if (!confirm('You have answered ' + userStats.totalAnswered + ' questions. Leave without viewing your scores?')) return;
+    }
+    stopTimer();
+    renderReadinessRing();
+    updateMasteryUI();
+    showScreen(startScreen);
+  });
+}
+
 // Quit Quiz button
 const quitQuizBtn = document.getElementById('quit-quiz-btn');
 if (quitQuizBtn) {
@@ -1791,10 +1837,10 @@ if (quitQuizBtn) {
 }
 
 // Re-route the header logo to act as a Home button
-document.querySelector('header .logo').style.cursor = 'pointer';
 document.querySelector('header .logo').addEventListener('click', () => {
   stopTimer();
   renderReadinessRing();
+  updateMasteryUI();
   updateSpacedCount();
   showScreen(startScreen);
 });
@@ -1870,13 +1916,17 @@ if (resetBtn) {
       missedQuestions: [],
       domainStats: {},
       questionHistory: {},
-      timePerQuestion: []
+      timePerQuestion: [],
+      sessionHistory: [],
+      confidenceData: { low: {total:0,correct:0}, medium: {total:0,correct:0}, high: {total:0,correct:0} },
+      masteryState: {}
     };
     userStats = { totalAnswered: 0, totalCorrect: 0, domainStats: {} };
     questions = [];
     currentIndex = 0;
+    sessionRecorded = false;
     renderReadinessRing();
-    updateSpacedCount();
+    updateMasteryUI();
     showToast('🗑 All progress has been reset.', 'warning');
   });
 }
@@ -2409,7 +2459,7 @@ function loadSeqLevel() {
     const el = document.createElement('div');
     el.className = 'seq-item';
     el.draggable = true;
-    el.innerHTML = `<span class="seq-grip">☰</span><span class="seq-num">${idx + 1}</span><span>${item.text}</span>`;
+    el.innerHTML = `<span class="seq-grip">☰</span><span class="seq-num">${idx + 1}</span><span>${item.text}</span><span class="seq-move-btns"><button class="seq-move-up" title="Move up">▲</button><button class="seq-move-down" title="Move down">▼</button></span>`;
     el.dataset.idx = idx;
 
     el.addEventListener('dragstart', (e) => {
@@ -2447,6 +2497,27 @@ function loadSeqLevel() {
       });
     });
 
+    // Mobile-friendly up/down buttons
+    el.querySelector('.seq-move-up').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (idx === 0) return;
+      const currentIdx = parseInt(el.dataset.idx);
+      if (currentIdx === 0) return;
+      const temp = seqState.items[currentIdx - 1];
+      seqState.items[currentIdx - 1] = seqState.items[currentIdx];
+      seqState.items[currentIdx] = temp;
+      renderSeqBoard();
+    });
+    el.querySelector('.seq-move-down').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const currentIdx = parseInt(el.dataset.idx);
+      if (currentIdx >= seqState.items.length - 1) return;
+      const temp = seqState.items[currentIdx + 1];
+      seqState.items[currentIdx + 1] = seqState.items[currentIdx];
+      seqState.items[currentIdx] = temp;
+      renderSeqBoard();
+    });
+
     board.appendChild(el);
   });
 }
@@ -2458,7 +2529,9 @@ function renderSeqBoard() {
     el.dataset.idx = idx;
     el.querySelector('.seq-num').innerText = idx + 1;
     const item = seqState.items[idx];
-    el.querySelector('span:last-child').innerText = item.text;
+    // Target the text span (3rd span, after grip and num)
+    const textSpan = el.querySelectorAll('span')[2];
+    if (textSpan) textSpan.innerText = item.text;
     el.classList.remove('seq-correct', 'seq-wrong');
   });
 }
@@ -2655,5 +2728,324 @@ document.getElementById('mines-restart-btn').addEventListener('click', startMine
 // Render high scores on load
 renderHighScores();
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CLOUD SYNC — Cross-device progress persistence via JSONBin.io
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ⚠️  SECURITY WARNING: This is a Master Key exposed in client-side JS.
+// For a personal study tool this is acceptable, but do NOT use this pattern
+// for any production or multi-user application. Rotate this key if the
+// repo ever becomes public.
+var JSONBIN_API_KEY = '$2a$10$QWJMcKOWqMZcLxIMqOZ78eUL.Y4CzuxZ7dSqR1GKaniNPRpxryMKK';
+var JSONBIN_ROOT = 'https://api.jsonbin.io/v3';
+
+async function hashPassphrase(passphrase) {
+  var encoder = new TextEncoder();
+  var data = encoder.encode(passphrase.trim().toLowerCase());
+  var hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  var hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+}
+
+var syncBinId = localStorage.getItem('cpmai_sync_bin_id') || null;
+var syncPassphraseStored = localStorage.getItem('cpmai_sync_passphrase') || '';
+
+function getSyncPayload() {
+  return {
+    globalStats: JSON.parse(localStorage.getItem('cpmai_global_stats') || '{}'),
+    quizState: JSON.parse(localStorage.getItem('cpmai_quiz_state') || '{}'),
+    gameHighScores: JSON.parse(localStorage.getItem('cpmai_game_high_scores') || '{}'),
+    syncTimestamp: new Date().toISOString(),
+    passphraseHash: null
+  };
+}
+
+function setSyncStatus(state, text) {
+  var el = document.getElementById('sync-status');
+  if (!el) return;
+  if (state === 'hidden') { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden', 'synced', 'syncing');
+  el.classList.add(state);
+  el.innerText = text;
+}
+
+function showSyncInfo(text, type) {
+  var infoEl = document.getElementById('sync-info');
+  var textEl = document.getElementById('sync-info-text');
+  if (!infoEl || !textEl) return;
+  infoEl.classList.remove('hidden', 'sync-error', 'sync-success');
+  if (type) infoEl.classList.add(type);
+  textEl.innerText = text;
+}
+
+async function cloudCreate(payload) {
+  var res = await fetch(JSONBIN_ROOT + '/b', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY, 'X-Bin-Private': 'true', 'X-Bin-Name': 'cpmai-sync-' + payload.passphraseHash.slice(0, 8) },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Create failed: ' + res.status);
+  var data = await res.json();
+  return data.metadata.id;
+}
+
+async function cloudUpdate(binId, payload) {
+  var res = await fetch(JSONBIN_ROOT + '/b/' + binId, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Update failed: ' + res.status);
+  return true;
+}
+
+async function cloudRead(binId) {
+  var res = await fetch(JSONBIN_ROOT + '/b/' + binId + '/latest', {
+    method: 'GET',
+    headers: { 'X-Master-Key': JSONBIN_API_KEY, 'X-Bin-Meta': 'false' }
+  });
+  if (!res.ok) throw new Error('Read failed: ' + res.status);
+  return await res.json();
+}
+
+// Master index bin: maps passphrase hashes → data bin IDs for cross-device lookup.
+// This bin is created once and updated on each save.
+var SYNC_INDEX_BIN_ID = localStorage.getItem('cpmai_sync_index_bin') || null;
+
+async function findBinByPassphrase(hash) {
+  // Try to find existing index bin that contains our hash → binId mapping
+  // Strategy: use a well-known bin name pattern for the index
+  try {
+    if (SYNC_INDEX_BIN_ID) {
+      var indexData = await cloudRead(SYNC_INDEX_BIN_ID);
+      if (indexData && indexData.binMap && indexData.binMap[hash]) {
+        return indexData.binMap[hash];
+      }
+    }
+  } catch (e) {
+    console.warn('Index lookup failed, will create new:', e);
+  }
+  return null;
+}
+
+async function registerBinInIndex(hash, binId) {
+  try {
+    if (SYNC_INDEX_BIN_ID) {
+      var indexData = await cloudRead(SYNC_INDEX_BIN_ID);
+      if (!indexData.binMap) indexData.binMap = {};
+      indexData.binMap[hash] = binId;
+      await cloudUpdate(SYNC_INDEX_BIN_ID, indexData);
+    } else {
+      // Create a new index bin
+      var payload = { binMap: {} };
+      payload.binMap[hash] = binId;
+      var res = await fetch(JSONBIN_ROOT + '/b', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_API_KEY, 'X-Bin-Private': 'true', 'X-Bin-Name': 'cpmai-sync-index' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        var data = await res.json();
+        SYNC_INDEX_BIN_ID = data.metadata.id;
+        localStorage.setItem('cpmai_sync_index_bin', SYNC_INDEX_BIN_ID);
+      }
+    }
+  } catch (e) {
+    console.warn('Index registration failed (non-critical):', e);
+  }
+}
+
+async function syncToCloud() {
+  var passInput = document.getElementById('sync-passphrase');
+  var pass = passInput ? passInput.value.trim() : '';
+  if (!pass) return;
+  setSyncStatus('syncing', '\u27f3 Syncing...');
+  showSyncInfo('Saving your progress to the cloud...', '');
+  try {
+    var hash = await hashPassphrase(pass);
+    var payload = getSyncPayload();
+    payload.passphraseHash = hash;
+    if (syncBinId) {
+      await cloudUpdate(syncBinId, payload);
+    } else {
+      // Check if a bin already exists for this passphrase (from another device)
+      var existingBinId = await findBinByPassphrase(hash);
+      if (existingBinId) {
+        syncBinId = existingBinId;
+        await cloudUpdate(syncBinId, payload);
+      } else {
+        var newId = await cloudCreate(payload);
+        syncBinId = newId;
+        await registerBinInIndex(hash, newId);
+      }
+      localStorage.setItem('cpmai_sync_bin_id', syncBinId);
+    }
+    syncPassphraseStored = pass;
+    localStorage.setItem('cpmai_sync_passphrase', pass);
+    localStorage.setItem('cpmai_sync_last', new Date().toISOString());
+    setSyncStatus('synced', '\u2713 Synced');
+    showSyncInfo('\u2705 Progress saved to cloud successfully!', 'sync-success');
+    updateSyncLastSynced();
+    showToast('\u2601\ufe0f Progress synced to cloud!', 'success');
+  } catch (err) {
+    console.error('Cloud sync error:', err);
+    setSyncStatus('hidden', '');
+    showSyncInfo('\u274c Sync failed: ' + err.message, 'sync-error');
+    showToast('\u274c Cloud sync failed.', 'error');
+  }
+}
+
+async function restoreFromCloud() {
+  var passInput = document.getElementById('sync-passphrase');
+  var pass = passInput ? passInput.value.trim() : '';
+  if (!pass) return;
+  setSyncStatus('syncing', '\u27f3 Restoring...');
+  showSyncInfo('Looking for your progress in the cloud...', '');
+  try {
+    // If we don't have a bin ID locally, try to look it up from the index
+    if (!syncBinId) {
+      var hash = await hashPassphrase(pass);
+      var foundBinId = await findBinByPassphrase(hash);
+      if (foundBinId) {
+        syncBinId = foundBinId;
+        localStorage.setItem('cpmai_sync_bin_id', foundBinId);
+      } else {
+        showSyncInfo('No cloud save found for this passphrase. Save your progress first on any device, then use the same passphrase to restore here.', 'sync-error');
+        setSyncStatus('hidden', '');
+        return;
+      }
+    }
+    var data = await cloudRead(syncBinId);
+    var hash = await hashPassphrase(pass);
+    if (data.passphraseHash && data.passphraseHash !== hash) {
+      showSyncInfo('\u274c Passphrase does not match the saved data.', 'sync-error');
+      setSyncStatus('hidden', '');
+      return;
+    }
+    if (data.globalStats) {
+      localStorage.setItem('cpmai_global_stats', JSON.stringify(data.globalStats));
+      globalStats = { ...globalStats, ...data.globalStats };
+    }
+    if (data.quizState) {
+      localStorage.setItem('cpmai_quiz_state', JSON.stringify(data.quizState));
+    }
+    if (data.gameHighScores) {
+      localStorage.setItem('cpmai_game_high_scores', JSON.stringify(data.gameHighScores));
+    }
+    syncPassphraseStored = pass;
+    localStorage.setItem('cpmai_sync_passphrase', pass);
+    localStorage.setItem('cpmai_sync_last', data.syncTimestamp || new Date().toISOString());
+    renderReadinessRing();
+    updateMasteryUI();
+    renderHighScores();
+    setSyncStatus('synced', '\u2713 Synced');
+    showSyncInfo('\u2705 Progress restored! Last saved: ' + new Date(data.syncTimestamp).toLocaleString(), 'sync-success');
+    updateSyncLastSynced();
+    showToast('\u2601\ufe0f Progress restored from cloud!', 'success');
+  } catch (err) {
+    console.error('Cloud restore error:', err);
+    setSyncStatus('hidden', '');
+    showSyncInfo('\u274c Restore failed: ' + err.message, 'sync-error');
+    showToast('\u274c Cloud restore failed.', 'error');
+  }
+}
+
+function autoSyncAfterSession() {
+  if (!syncBinId || !syncPassphraseStored) return;
+  var payload = getSyncPayload();
+  hashPassphrase(syncPassphraseStored).then(function(hash) {
+    payload.passphraseHash = hash;
+    cloudUpdate(syncBinId, payload).then(function() {
+      setSyncStatus('synced', '\u2713 Synced');
+      localStorage.setItem('cpmai_sync_last', new Date().toISOString());
+    }).catch(function(err) {
+      console.warn('Auto-sync failed:', err);
+    });
+  });
+}
+
+function updateSyncLastSynced() {
+  var el = document.getElementById('sync-last-synced');
+  if (!el) return;
+  var last = localStorage.getItem('cpmai_sync_last');
+  if (last) {
+    el.classList.remove('hidden');
+    el.innerText = 'Last synced: ' + new Date(last).toLocaleString();
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
+// Sync Modal UI
+var cloudSyncBtn = document.getElementById('cloud-sync-btn');
+var syncModal = document.getElementById('sync-modal');
+var syncModalCloseBtn = document.getElementById('sync-modal-close');
+var syncPassphraseInput = document.getElementById('sync-passphrase');
+var syncSaveBtn = document.getElementById('sync-save-btn');
+var syncRestoreBtn = document.getElementById('sync-restore-btn');
+
+if (cloudSyncBtn && syncModal) {
+  cloudSyncBtn.addEventListener('click', function() {
+    syncModal.classList.remove('hidden');
+    if (syncPassphraseInput && syncPassphraseStored) {
+      syncPassphraseInput.value = syncPassphraseStored;
+      if (syncSaveBtn) syncSaveBtn.disabled = false;
+      if (syncRestoreBtn) syncRestoreBtn.disabled = false;
+    }
+    var infoEl = document.getElementById('sync-info');
+    if (infoEl) infoEl.classList.add('hidden');
+    updateSyncLastSynced();
+  });
+  syncModalCloseBtn.addEventListener('click', function() { syncModal.classList.add('hidden'); });
+  syncModal.addEventListener('click', function(e) { if (e.target === syncModal) syncModal.classList.add('hidden'); });
+}
+
+if (syncPassphraseInput) {
+  syncPassphraseInput.addEventListener('input', function() {
+    var hasValue = syncPassphraseInput.value.trim().length >= 3;
+    if (syncSaveBtn) syncSaveBtn.disabled = !hasValue;
+    if (syncRestoreBtn) syncRestoreBtn.disabled = !hasValue;
+  });
+}
+
+if (syncSaveBtn) syncSaveBtn.addEventListener('click', syncToCloud);
+if (syncRestoreBtn) syncRestoreBtn.addEventListener('click', restoreFromCloud);
+
+if (syncBinId && syncPassphraseStored) {
+  setSyncStatus('synced', '\u2713 Synced');
+}
+
+// Hook auto-sync into session completion
+var _origShowDashboard = showDashboard;
+showDashboard = function(isGlobalView) {
+  _origShowDashboard(isGlobalView);
+  if (!isGlobalView) autoSyncAfterSession();
+};
+
+var _origShowExamReview = showExamReview;
+showExamReview = function() {
+  _origShowExamReview();
+  autoSyncAfterSession();
+};
+
+// ─── CHART RESIZE HANDLING ──────────────────────────────────────────────────
+// Re-render canvas charts when the container size changes (window resize,
+// orientation change, etc.) to prevent distortion.
+(function() {
+  let resizeTimer = null;
+  function handleResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (dashboardScreen && dashboardScreen.classList.contains('active')) {
+        renderSessionChart();
+        renderDomainRadar();
+      }
+    }, 250);
+  }
+  window.addEventListener('resize', handleResize);
+  window.addEventListener('orientationchange', handleResize);
+})();
+
 // ─── INIT ───────────────────────────────────────────────────────────────────
 loadQuestions();
+

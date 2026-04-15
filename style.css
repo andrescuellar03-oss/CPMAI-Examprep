@@ -53,6 +53,20 @@ header {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  user-select: none;
+}
+
+.logo::before {
+  content: "🏠 ";
+  -webkit-text-fill-color: initial;
+  font-size: 0.95rem;
+}
+
+.logo:hover {
+  opacity: 0.8;
+  transform: scale(1.02);
 }
 
 .container {
@@ -1785,6 +1799,45 @@ input:checked + .toggle-slider::before {
   flex-shrink: 0;
 }
 
+/* Mobile-friendly move buttons (hidden on desktop, shown on touch devices) */
+.seq-move-btns {
+  display: none;
+  margin-left: auto;
+  flex-shrink: 0;
+  gap: 0.2rem;
+}
+
+.seq-move-btns button {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.seq-move-btns button:hover {
+  background: rgba(99,102,241,0.2);
+  border-color: rgba(99,102,241,0.4);
+  color: #a5b4fc;
+}
+
+@media (max-width: 768px) {
+  .seq-move-btns {
+    display: flex;
+  }
+  .seq-item .seq-grip {
+    display: none;
+  }
+}
+
 .seq-item.seq-correct {
   border-color: rgba(16,185,129,0.4);
   background: rgba(16,185,129,0.08);
@@ -1901,4 +1954,169 @@ input:checked + .toggle-slider::before {
   font-size: 0.82rem;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+/* ─── Cloud Sync Modal ────────────────────────────────────────── */
+.sync-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.sync-modal-overlay.hidden {
+  display: none !important;
+}
+
+.sync-modal {
+  width: 90%;
+  max-width: 460px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.sync-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.sync-modal-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.sync-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.sync-modal-close:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-main);
+}
+
+.sync-field {
+  margin-bottom: 1.25rem;
+}
+
+.sync-field label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.4rem;
+}
+
+.sync-input {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-main);
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.sync-input:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.sync-input::placeholder {
+  color: rgba(148, 163, 184, 0.5);
+}
+
+.sync-field-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  opacity: 0.7;
+}
+
+.sync-info {
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.85rem;
+  color: #7dd3fc;
+}
+
+.sync-info.sync-error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.sync-info.sync-success {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.sync-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.sync-actions button {
+  flex: 1;
+}
+
+.sync-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sync-last-synced {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Sync status badge in header */
+.sync-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: all 0.3s ease;
+}
+
+.sync-status.synced {
+  background: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.sync-status.syncing {
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  animation: timerPulse 1.2s ease-in-out infinite;
 }
