@@ -568,8 +568,20 @@ function updateSpacedCount() {
   // no-op: mastery UI is updated via saveGlobalStats → updateMasteryUI
 }
 
-// ─── STATE MANAGEMENT ───────────────────────────────────────────────────────
 function showScreen(screen) {
+  // Bug Fix: Hook into Browser History to enable native back-button functionality
+  if (!window.isNavigatingBack && screen && screen.id) {
+    if (!history.state || history.state.screenId !== screen.id) {
+      // The first screen loaded should replace the state to anchor history
+      if (!history.state && history.length <= 1) {
+        history.replaceState({ screenId: screen.id }, '', `#${screen.id}`);
+      } else {
+        history.pushState({ screenId: screen.id }, '', `#${screen.id}`);
+      }
+    }
+  }
+  window.isNavigatingBack = false;
+
   startScreen.classList.remove('active');
   quizScreen.classList.remove('active');
   dashboardScreen.classList.remove('active');
@@ -606,6 +618,32 @@ function showScreen(screen) {
     }
   }
 }
+
+// ─── BROWSER BACK BUTTON SUPPORT ────────────────────────────────────────────
+window.addEventListener('popstate', (e) => {
+  let targetScreenId = null;
+  if (e.state && e.state.screenId) {
+    targetScreenId = e.state.screenId;
+  } else if (window.location.hash) {
+    targetScreenId = window.location.hash.replace('#', '');
+  } else {
+    targetScreenId = 'start-screen';
+  }
+
+  const screen = document.getElementById(targetScreenId);
+  if (screen) {
+    window.isNavigatingBack = true; // Signal to showScreen to NOT push history
+    
+    // If we are backing into the start screen, ensure timer goes off and exam mode defaults
+    if (screen === startScreen) {
+      stopTimer();
+      examSimMode = false;
+      renderReadinessRing();
+    }
+    
+    showScreen(screen);
+  }
+});
 
 function saveState() {
   const filterDropdown = document.getElementById('domain-filter');
@@ -1037,6 +1075,11 @@ function showDashboard(isGlobalView = false) {
     }
   }
 
+  // Bug Fix: We MUST display the screen before rendering charts so the canvas elements 
+  // get valid dimensions from the DOM. Without this, getBoundingClientRect() returns 0,
+  // causing mathematical exceptions in canvas gradient rendering (IndexSizeError).
+  showScreen(dashboardScreen);
+
   // P1: Render readiness section on dashboard
   renderDashboardReadiness();
 
@@ -1076,8 +1119,6 @@ function showDashboard(isGlobalView = false) {
     currentIndex = questions.length;
     saveState();
   }
-
-  showScreen(dashboardScreen);
 }
 
 // ─── REVIEW FEATURES ────────────────────────────────────────────────────────
@@ -1224,6 +1265,9 @@ function renderSessionChart() {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
+  
+  if (rect.width === 0 || rect.height === 0) return;
+
   canvas.width = rect.width * dpr;
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
@@ -1231,8 +1275,8 @@ function renderSessionChart() {
 
   const recent = sessions.slice(-20);
   const padding = { top: 20, right: 20, bottom: 30, left: 40 };
-  const w = rect.width - padding.left - padding.right;
-  const h = rect.height - padding.top - padding.bottom;
+  const w = Math.max(1, rect.width - padding.left - padding.right);
+  const h = Math.max(1, rect.height - padding.top - padding.bottom);
 
   // Y axis gridlines: 0-100
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
@@ -1392,6 +1436,9 @@ function renderDomainRadar() {
   const ctx = canvas.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
+  
+  if (rect.width === 0 || rect.height === 0) return;
+
   canvas.width = rect.width * dpr;
   canvas.height = rect.height * dpr;
   ctx.scale(dpr, dpr);
@@ -1399,7 +1446,7 @@ function renderDomainRadar() {
 
   const cx = rect.width / 2;
   const cy = rect.height / 2;
-  const radius = Math.min(cx, cy) - 45;
+  const radius = Math.max(1, Math.min(cx, cy) - 40);
   const n = domains.length;
   const angleStep = (Math.PI * 2) / n;
   const startAngle = -Math.PI / 2; // Start from top
@@ -1833,9 +1880,6 @@ submitExamBtn.addEventListener('click', () => {
 const flaggedHomeBtn = document.getElementById('flagged-home-btn');
 if (flaggedHomeBtn) {
   flaggedHomeBtn.addEventListener('click', () => {
-    if (userStats.totalAnswered > 0) {
-      if (!confirm('You have answered ' + userStats.totalAnswered + ' questions. Leave without viewing your scores?')) return;
-    }
     stopTimer();
     renderReadinessRing();
     updateMasteryUI();
@@ -1847,9 +1891,6 @@ if (flaggedHomeBtn) {
 const quitQuizBtn = document.getElementById('quit-quiz-btn');
 if (quitQuizBtn) {
   quitQuizBtn.addEventListener('click', () => {
-    if (userStats.totalAnswered > 0) {
-      if (!confirm('You have answered ' + userStats.totalAnswered + ' questions. Quit and lose this session?')) return;
-    }
     stopTimer();
     examSimMode = false;
     renderReadinessRing();
