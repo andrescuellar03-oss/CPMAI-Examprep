@@ -252,11 +252,12 @@ function showToast(message, type = 'success', durationMs = 3000) {
 }
 
 // ─── P2: TIMER ──────────────────────────────────────────────────────────────
-function startTimer(totalQuestions) {
+function startTimer(totalQuestions, resumeSeconds) {
   if (!timerEnabled) return;
-  // ~65 seconds per question (matching real exam pace)
-  timerSeconds = totalQuestions * 65;
+  // Use resumed seconds if provided, otherwise ~65 seconds per question
+  timerSeconds = (typeof resumeSeconds === 'number') ? resumeSeconds : totalQuestions * 65;
   updateTimerDisplay();
+  if (timerInterval) clearInterval(timerInterval);
   timerInterval = setInterval(() => {
     timerSeconds--;
     updateTimerDisplay();
@@ -524,8 +525,30 @@ async function loadQuestions() {
     updateMasteryUI();
 
     if (useSaved && userStats.totalAnswered > 0 && currentIndex < questions.length) {
+      // Restore timer and exam mode state from saved session
+      const state = JSON.parse(savedState);
+      if (state.examSimMode) examSimMode = true;
+      if (state.timerEnabled) timerEnabled = true;
+
       showScreen(quizScreen);
+
+      // Re-apply exam sim UI if it was active
+      if (examSimMode) {
+        quizScreen.classList.add('exam-sim-mode');
+        const existingIndicator = document.querySelector('.exam-sim-indicator');
+        if (existingIndicator) existingIndicator.remove();
+        const indicator = document.createElement('span');
+        indicator.className = 'exam-sim-indicator';
+        indicator.innerText = 'EXAM SIM';
+        questionTracker.after(indicator);
+      }
+
       loadQuestion();
+
+      // Resume the countdown timer from where it left off
+      if (timerEnabled && typeof state.timerSeconds === 'number' && state.timerSeconds > 0) {
+        startTimer(questions.length, state.timerSeconds);
+      }
     } else if (useSaved && currentIndex >= questions.length && questions.length > 0) {
       showDashboard(false);
     }
@@ -654,7 +677,11 @@ function saveState() {
     questions,
     currentIndex,
     userStats,
-    version: rawQuestionsLength
+    version: rawQuestionsLength,
+    // Timer persistence: save remaining seconds so refresh resumes the clock
+    timerSeconds,
+    timerEnabled,
+    examSimMode
   }));
 }
 
