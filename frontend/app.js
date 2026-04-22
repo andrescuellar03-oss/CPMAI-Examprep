@@ -493,29 +493,39 @@ async function loadQuestions() {
     let useSaved = false;
 
     if (savedState) {
-      const state = JSON.parse(savedState);
-      if (state.version === rawQuestionsLength) {
-        questions = state.questions;
-        currentIndex = state.currentIndex;
-        userStats = state.userStats;
+      try {
+        const state = JSON.parse(savedState);
+        if (state.version === rawQuestionsLength) {
+          questions = state.questions;
+          currentIndex = state.currentIndex;
+          userStats = state.userStats;
 
-        const filterDropdown = document.getElementById('domain-filter');
-        if (filterDropdown && state.selectedDomain) {
-          filterDropdown.value = state.selectedDomain;
+          const filterDropdown = document.getElementById('domain-filter');
+          if (filterDropdown && state.selectedDomain) {
+            filterDropdown.value = state.selectedDomain;
+          }
+
+          useSaved = true;
         }
-
-        useSaved = true;
+      } catch (parseErr) {
+        console.warn('Corrupted quiz state in localStorage, resetting:', parseErr);
+        localStorage.removeItem('cpmai_quiz_state');
       }
     }
 
     const savedGlobal = localStorage.getItem('cpmai_global_stats');
     if (savedGlobal) {
-      const parsed = JSON.parse(savedGlobal);
-      globalStats = { ...globalStats, ...parsed };
-      // Ensure new fields exist from older saves
-      if (!globalStats.questionHistory) globalStats.questionHistory = {};
-      if (!globalStats.timePerQuestion) globalStats.timePerQuestion = [];
-      if (!globalStats.knowledgeGaps) globalStats.knowledgeGaps = {};
+      try {
+        const parsed = JSON.parse(savedGlobal);
+        globalStats = { ...globalStats, ...parsed };
+        // Ensure new fields exist from older saves
+        if (!globalStats.questionHistory) globalStats.questionHistory = {};
+        if (!globalStats.timePerQuestion) globalStats.timePerQuestion = [];
+        if (!globalStats.knowledgeGaps) globalStats.knowledgeGaps = {};
+      } catch (parseErr) {
+        console.warn('Corrupted global stats in localStorage, resetting:', parseErr);
+        localStorage.removeItem('cpmai_global_stats');
+      }
     }
 
     // Render readiness ring on start screen
@@ -616,8 +626,8 @@ function showScreen(screen) {
   gameScreenIds.forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('active'); });
   screen.classList.add('active');
 
-  // Bug 1: Scroll to top on every screen transition
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Bug 1: Scroll to top on every screen transition (use instant to avoid jarring animation)
+  window.scrollTo({ top: 0, behavior: 'instant' });
 
   // Bug 3: Clean up stale EXAM SIM indicator when leaving quiz
   if (screen !== quizScreen) {
@@ -660,8 +670,10 @@ window.addEventListener('popstate', (e) => {
     // If we are backing into the start screen, ensure timer goes off and exam mode defaults
     if (screen === startScreen) {
       stopTimer();
+      timerSeconds = 0;
       examSimMode = false;
       renderReadinessRing();
+      updateSpacedCount();
     }
     
     showScreen(screen);
@@ -839,11 +851,16 @@ function loadQuestion() {
   optionsContainer.innerHTML = '';
   feedbackPanel.classList.add('hidden');
   flagBtn.classList.remove('hidden');
+  nextBtn.innerText = 'Next Question →';
 
-  // Show/hide confidence buttons
+  // Show/hide confidence buttons (hide in exam sim mode)
   const confBtns = document.getElementById('confidence-buttons');
   if (confBtns) {
-    confBtns.classList.remove('hidden');
+    if (examSimMode) {
+      confBtns.classList.add('hidden');
+    } else {
+      confBtns.classList.remove('hidden');
+    }
     currentConfidence = null;
     confBtns.querySelectorAll('.conf-btn').forEach(b => b.classList.remove('conf-selected'));
   }
@@ -1041,6 +1058,7 @@ function checkFlaggedQuestions() {
 
 function showDashboard(isGlobalView = false) {
   stopTimer();
+  timerSeconds = 0;
   progressBar.style.width = '100%';
 
   // Record session for performance trending (non-global only, avoid dupes)
@@ -1190,6 +1208,7 @@ function handleNextReview() {
 // ─── EXAM SIMULATION REVIEW ─────────────────────────────────────────────────
 function showExamReview() {
   stopTimer();
+  timerSeconds = 0;
   examSimMode = false;
   quizScreen.classList.remove('exam-sim-mode');
   const existing = document.querySelector('.exam-sim-indicator');
@@ -1919,6 +1938,7 @@ const quitQuizBtn = document.getElementById('quit-quiz-btn');
 if (quitQuizBtn) {
   quitQuizBtn.addEventListener('click', () => {
     stopTimer();
+    timerSeconds = 0;
     examSimMode = false;
     renderReadinessRing();
     updateSpacedCount();
@@ -2075,7 +2095,8 @@ if (resetBtn) {
       timePerQuestion: [],
       sessionHistory: [],
       confidenceData: { low: {total:0,correct:0}, medium: {total:0,correct:0}, high: {total:0,correct:0} },
-      masteryState: {}
+      masteryState: {},
+      knowledgeGaps: {}
     };
     userStats = { totalAnswered: 0, totalCorrect: 0, domainStats: {} };
     questions = [];

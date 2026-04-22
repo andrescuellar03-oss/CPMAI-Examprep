@@ -1308,6 +1308,10 @@ input:checked + .toggle-slider::before {
   display: none !important;
 }
 
+.exam-sim-mode .confidence-buttons {
+  display: none !important;
+}
+
 .exam-sim-indicator {
   display: inline-block;
   background: rgba(244, 114, 182, 0.15);
