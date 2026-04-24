@@ -4,8 +4,8 @@ import os
 
 # Streamlit Page Configuration
 st.set_page_config(
-    page_title="PMI CPMAI Exam Simulator", 
-    page_icon="🎓", 
+    page_title="CPMAI Quick Practice", 
+    page_icon="⚡", 
     layout="wide", 
     initial_sidebar_state="collapsed"
 )
@@ -16,8 +16,9 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    .block-container {padding-top: 0; padding-bottom: 0; padding-left: 0; padding-right: 0; max-width: 100%;}
-    iframe {border: none !important;}
+    .block-container {padding: 0 !important; max-width: 100% !important; overflow: hidden;}
+    iframe {border: none !important; width: 100vw !important; height: 100vh !important;}
+    body {overflow: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -28,50 +29,29 @@ def load_file(filename):
         return f.read()
 
 try:
-    # 1. Load the raw files from their new modular directories
-    html_content = load_file('frontend/index.html')
-    css_content = load_file('frontend/style.css')
-    js_content = load_file('frontend/app.js')
+    # 1. Load files
+    html_content = load_file('quiz.html')
     json_content = load_file('data/questions.json')
     
-    # 2. Patch the javascript so that it doesn't attempt to fetch() a network JSON file.
-    patched_js = js_content.replace(
-        "const response = await fetch('../data/questions.json');", 
-        f"const response = {{ json: async () => {json_content} }};"
-    )
+    # 2. Inject JSON data directly to bypass fetch()
+    injection = f"""
+    let ALL_QUESTIONS = {json_content};
+    async function loadData() {{
+        // Fetch is bypassed; data is injected by Streamlit
+        return;
+    }}
+    """
     
-    # 2b. Securely inject the JSONBin.io Master API key from Streamlit Secrets
-    jsonbin_key = ""
-    if "JSONBIN_API_KEY" in st.secrets:
-        jsonbin_key = st.secrets["JSONBIN_API_KEY"]
-    else:
-        st.warning("⚠️ JSONBIN_API_KEY is not configured in st.secrets. Cloud Sync will not function.")
-        
-    patched_js = patched_js.replace('__STREAMLIT_INJECTED_JSONBIN_KEY__', jsonbin_key)
-    
-    # 3. Bundle everything directly inside the HTML payload:
-    #    - Inline CSS (replace the stylesheet link)
-    #    - Inline app.js (replace the script tag with the patched version)
-    #    - Remove the service worker registration (not needed in Streamlit iframe)
+    # Replace the empty initialization with our injected data
     bundled_html = html_content.replace(
-        '<link rel="stylesheet" href="style.css">', 
-        f'<style>{css_content}</style>'
-    ).replace(
-        '<script src="app.js"></script>',
-        f'<script>{patched_js}</script>'
-    ).replace(
-        """<script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
-    }
-  </script>""",
-        '<!-- Service worker disabled for Streamlit deployment -->'
+        "let ALL_QUESTIONS = [];", 
+        injection
     )
     
-    # 4. Render the bundled application as an isolated web component.
-    #    Height is generous to avoid dual scrollbars on most viewports.
-    components.html(bundled_html, height=2000, scrolling=True)
+    # 3. Render the app
+    # We use a large height here, but our CSS above will force the iframe to be 100vh of the viewport
+    components.html(bundled_html, height=1000, scrolling=False)
     
 except Exception as e:
     st.error(f"Error loading the simulator: {str(e)}")
-    st.info("Ensure that index.html, style.css, app.js, and questions.json are in the same directory as this file.")
+    st.info("Ensure that quiz.html and data/questions.json exist.")
